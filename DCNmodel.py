@@ -1,0 +1,212 @@
+from typing import List
+import pickle
+import os
+
+import pandas as pd
+import tensorflow as tf
+from tensorflow.keras import layers
+from tensorflow.keras.activations import relu, sigmoid, tanh, linear
+
+INTS = tf.int32
+FLOATS = tf.float32
+
+
+class CrossLayer(tf.keras.layers.Layer):
+    # TODO change name to **kwargs
+    def __init__(self, name=None):
+        super().__init__(name=name)
+
+    def build(self, input_shape):
+        self.w = self.add_weight(
+            shape=(input_shape[0][-1],),
+            initializer="random_normal",
+            trainable=True,
+        )
+        self.b = self.add_weight(
+            shape=(input_shape[0][-1],), initializer="random_normal",
+            trainable=True)
+
+    def call(self, inputs):
+        x_0 = inputs[0]
+        x_l = inputs[1]
+        cross_term = tf.matmul(
+            tf.matmul(x_l, x_0, transpose_a=True), tf.expand_dims(self.w, 1))
+        return tf.transpose(cross_term, (0, 2, 1)) + self.b + x_0
+
+
+class DeepCrossNetwork:
+
+    def __init__(
+            self, vocab_file: str='data/vocab/vocab_all_data_thresh10.pkl',
+            save_path='model/my_model'
+    ):
+        """Creates the max vocab size for each categorical feature."""
+        self.save_path = save_path
+        with open(vocab_file, 'rb') as fp:
+            # dict of numpy arrays for each feature.
+            self.vocabs = pickle.load(fp)
+
+        self.embed_dims = {}
+        for col, vocab in self.vocabs.items():
+            self.embed_dims[col] = 6 * int(len(vocab) ** 0.25)
+
+        self.numeric_cols = [f'I{i + 1}' for i in range(13)]
+        self.categorical_cols = [*self.vocabs]  # dict.keys() prevents pickle.
+        self.label_col = 'label'
+
+        self.model = None
+        self.input_layer = []
+        self.output_layer = []
+        # self.layers = {}
+
+    def clear_model(self):
+        """Required step if creating model more than once."""
+        self.model = None
+        self.input_layer = []
+        self.output_layer = []
+
+
+
+    def create_feature_embedding(self, feat_name: str):
+        """Creates graph from input to embedding for categorical features."""
+        input_layer = layers.Input(shape=(1,), name=feat_name)
+        # this is needed when specifying model.
+        self.input_layer.append(input_layer)
+        encode_layer = layers.IntegerLookup(
+            vocabulary=self.vocabs[feat_name], num_oov_indices=1,
+            output_mode='int', name=f'idx_{feat_name}', dtype=INTS)
+        embed_layer = layers.Embedding(
+            input_dim=len(self.vocabs[feat_name]) + 1,
+            output_dim=self.embed_dims[feat_name],
+            name=f'emb_{feat_name}')
+        # connect the layers
+        x = encode_layer(input_layer)  # first input is integer_inputs
+        x = embed_layer(x)
+        return x
+
+    def create_MLP_model(self, dense_layers: int, units: int,
+                         dropout_rate: float = 0.5, plot_file: str = None):
+        """Vanilla MLP. 5 dense layers, size of 1024."""
+        self.clear_model()
+        # create input for numeric features
+        numeric_inputs = layers.Input(
+            shape=(1, len(self.numeric_cols),), name='numeric_inputs',
+            dtype=INTS)
+        self.input_layer.append(numeric_inputs)
+
+        cat_embeddings = []
+        for col in self.categorical_cols:
+            cat_embeddings.append(self.create_feature_embedding(col))
+
+        # numeric features go first, then all cat features
+        cat_embeddings.insert(0, numeric_inputs)
+        concat = layers.Concatenate(name='concat_layer')(cat_embeddings)
+        x = concat
+        for i in range(dense_layers):
+            x = layers.Dense(
+                units=units, activation=relu, name=f'dense{i}')(x)
+            x = layers.Dropout(rate=dropout_rate, name=f'drop{i}')(x)
+
+        output_layer = layers.Dense(
+            units=1, activation=sigmoid, name='output_layer')(x)
+        self.output_layer = output_layer
+        self.model = tf.keras.Model(
+            inputs=self.input_layer, outputs=output_layer, name='MLP_model')
+
+        if plot_file:
+            tf.keras.utils.plot_model(
+                self.model, to_file=plot_file, show_shapes=True,
+                show_layer_names=True)
+
+
+    def create_DCN_model(
+            self, cross_layers: int, dense_layers: int, units: int,
+            dropout_rate: float = 0.5, plot_file: str = None):
+        """Cross network in parralell with MLP"""
+        self.clear_model()
+        # Numeric and embedding concatenation feeds into both cross and MLP
+        # streams
+        numeric_inputs = layers.Input(
+            shape=(1, len(self.numeric_cols),), name='numeric_inputs',
+            dtype=INTS)
+        self.input_layer.append(numeric_inputs)
+
+        cat_embeddings = []
+        for col in self.categorical_cols:
+            cat_embeddings.append(self.create_feature_embedding(col))
+
+        # numeric features go first, then all cat features
+        cat_embeddings.insert(0, numeric_inputs)
+        concat = layers.Concatenate(name='concat_layer')(cat_embeddings)
+
+        # MLP Stream
+        x = concat
+        for i in range(dense_layers):
+            x = layers.Dense(
+                units=units, activation=relu, name=f'dense{i}')(x)
+            x = layers.Dropout(rate=dropout_rate, name=f'drop{i}')(x)
+        mlp_output_layer = layers.Identity(name='mlp_output_layer')(x)
+
+        # cross network stream
+        x = concat
+        for i in range(cross_layers):
+            x = CrossLayer(name=f'cross{i}')((concat, x))
+        concat2 = layers.Concatenate(
+            name='concat_layer2')([x, mlp_output_layer])
+
+        output_layer = layers.Dense(
+            units=1, activation=sigmoid, name='output_layer')(concat2)
+        self.output_layer = output_layer
+        self.model = tf.keras.Model(
+            inputs=self.input_layer, outputs=output_layer, name='DCN_model')
+
+        if plot_file:
+            tf.keras.utils.plot_model(
+                self.model, to_file=plot_file, show_shapes=True,
+                show_layer_names=True)
+
+
+    def compile_model(self):
+        self.model.compile(
+            loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+            metrics=[tf.keras.metrics.AUC(),
+                     tf.keras.metrics.BinaryAccuracy(threshold=0.25)],
+        )
+
+    def save_model(self):
+        # saves the model separately from the DeepCrossNetwork object.
+        keras_path = self.save_path+'.keras'
+        if os.path.exists(keras_path):
+            print(f'overwriting: {keras_path}')
+        else:
+            print(f'saving tf.keras.model to {keras_path}')
+        self.model.save(keras_path)
+
+    def load_model(self):
+        # saves the model separately from the DeepCrossNetwork object.
+        keras_path = self.save_path+'.keras'
+        if not os.path.exists(keras_path):
+            print(f'no file found at: {keras_path}')
+            print(f'Cannot load model.')
+        else:
+            self.model = tf.keras.models.load_model(keras_path)
+
+
+def create_input_data(
+        df: pd.DataFrame,
+        model: DeepCrossNetwork,
+        label: str = 'train') -> (List[tf.Tensor], tf.Tensor):
+    """Creates tf input data from pandas DF"""
+    target_df = df.pop('label')
+    target = tf.expand_dims(tf.convert_to_tensor(
+        target_df, name=f'label_{label}', dtype=INTS), 1)
+    # 1 input for integer features, 26 inputs for categorical features
+    input_data = [tf.expand_dims(tf.convert_to_tensor(
+        df[model.numeric_cols], dtype=FLOATS, name=f'numeric_{label}'), 1)]
+
+    for col in model.categorical_cols:
+        input_data.append(
+            tf.convert_to_tensor(df[col], name=f'{col}_{label}',
+                                 dtype=INTS))
+    return input_data, target
