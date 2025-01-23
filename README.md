@@ -28,13 +28,28 @@ Other papers on this data set can be found [here](https://paperswithcode.com/sot
 
 
 ## Install
-######  
-        `pip install -r requirements.txt`
 
-To run `tensorflow` on GPU, might need to manually install.
-######  
-        pip install tensorflow[and-cuda] 
+You will need to install `poetry` if you don't have it. See 
+[https://python-poetry.org/docs/](https://python-poetry.org/docs/).
 
+### Without poetry
+If you don't want to use `poetry`, you can try to manually install the python
+packages listed under `[tool.poetry.dependencies]` in `pyproject.toml`. For GPU
+usage, do `pip install tensorflow[and-cuda]` instead of 
+`pip install tensorflow`.
+
+### Using poetry
+
+For GPU enabled.
+######  
+        `poetry install`
+
+For no GPU enabled.
+######  
+        `poetry install --without nvidia`
+
+
+### To enable plotting DAGs
 To enable plotting of neural network graph you need `graphvis`.
 ######  
         sudo apt-get install graphviz

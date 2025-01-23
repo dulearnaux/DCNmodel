@@ -1,0 +1,42 @@
+[project]
+name = "dcnmodel"
+version = "0.1.0"
+description = "Small package that builds and trains a Deep Cross Network for binary classification."
+authors = [
+    {name = "dulearnaux",email = "dushan4@gmail.com"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.11, <3.13"
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.dependencies]
+tensorflow = "*"
+pyarrow = "*"
+pydot = "*"
+pydotplus = "*"
+matplotlib = "*"
+ipython = "*"
+pandas = "*"
+numpy = "*"
+
+# If you want to use GPU. Slow to download. Runs much faster.
+[tool.poetry.group.nvidia.dependencies]
+nvidia-nccl-cu12 = "*"
+nvidia-nvjitlink-cu12 = "*"
+nvidia-curand-cu12 = "*"
+nvidia-cuda-runtime-cu12 = "*"
+nvidia-cuda-nvrtc-cu12 = "*"
+nvidia-cuda-nvcc-cu12 = "*"
+nvidia-cuda-cupti-cu12 = "*"
+nvidia-cublas-cu12 = "*"
+nvidia-cusparse-cu12 = "*"
+nvidia-cufft-cu12 = "*"
+nvidia-cudnn-cu12 = "*"
+nvidia-cusolver-cu12 = "*"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

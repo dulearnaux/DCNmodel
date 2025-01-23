@@ -1,5 +1,7 @@
 .venv/
 .idea/
-requirements.in
 data/
 /logs/
+/model/*.pkl
+/model/*.keras
+/.python-version
