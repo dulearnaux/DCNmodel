@@ -12,7 +12,6 @@ FLOATS = tf.float32
 
 
 class CrossLayer(tf.keras.layers.Layer):
-    # TODO test name is passed correctly.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -38,11 +37,16 @@ class CrossLayerBlock(tf.keras.Model):
     def __init__(self, n_layers: int = 6, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_layers = n_layers
+        self.cross_layers = []
+
+    def build(self):
+        for i in range(self.n_layers):
+            self.cross_layers.append(CrossLayer(name=f'cross{i}'))
 
     def call(self, inputs):
         x = inputs
-        for i in range(self.n_layers):
-            x = CrossLayer(name=f'cross{i}')((inputs, x))
+        for layer in self.cross_layers:
+            x = layer((inputs, x))
         return x
 
 
@@ -160,11 +164,11 @@ class DeepCrossNetwork:
         mlp_output_layer = layers.Identity(name='mlp_output_layer')(x)
 
         # cross network stream
-        x = concat
-        for i in range(cross_layers):
-            x = CrossLayer(name=f'cross{i}')((concat, x))
-        concat2 = layers.Concatenate(
-            name='concat_layer2')([x, mlp_output_layer])
+        x = CrossLayerBlock(
+            n_layers=cross_layers,
+            name=f'cross_layer_block_n_{cross_layers}')(concat)
+        concat2 = layers.Concatenate(name='concat_layer2')(
+            [x, mlp_output_layer])
 
         output_layer = layers.Dense(
             units=1, activation=sigmoid, name='output_layer')(concat2)
