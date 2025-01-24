@@ -12,9 +12,9 @@ FLOATS = tf.float32
 
 
 class CrossLayer(tf.keras.layers.Layer):
-    # TODO change name to **kwargs
-    def __init__(self, name=None):
-        super().__init__(name=name)
+    # TODO test name is passed correctly.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def build(self, input_shape):
         self.w = self.add_weight(
@@ -32,6 +32,18 @@ class CrossLayer(tf.keras.layers.Layer):
         cross_term = tf.matmul(
             tf.matmul(x_l, x_0, transpose_a=True), tf.expand_dims(self.w, 1))
         return tf.transpose(cross_term, (0, 2, 1)) + self.b + x_0
+
+
+class CrossLayerBlock(tf.keras.Model):
+    def __init__(self, n_layers: int = 6, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.n_layers = n_layers
+
+    def call(self, inputs):
+        x = inputs
+        for i in range(self.n_layers):
+            x = CrossLayer(name=f'cross{i}')((inputs, x))
+        return x
 
 
 class DeepCrossNetwork:
@@ -122,7 +134,7 @@ class DeepCrossNetwork:
     def create_DCN_model(
             self, cross_layers: int, dense_layers: int, units: int,
             dropout_rate: float = 0.5, plot_file: str = None):
-        """Cross network in parralell with MLP"""
+        """Cross network in parallel with MLP"""
         self.clear_model()
         # Numeric and embedding concatenation feeds into both cross and MLP
         # streams
