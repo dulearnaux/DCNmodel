@@ -12,7 +12,8 @@ if __name__ == '__main__':
     # DCN = DeepCrossNetwork(
     #     vocab_file='data/vocab/vocab_all_data_thresh0.pkl',
     #     save_path='model/MLP_vocab00')
-    # DCN.create_MLP_model(dense_layers=5, units=1024, dropout_rate=0.5, plot_file='./docs/images/MLPmodel.png')
+    # DCN.create_mlp_model(dense_layers=5, units=1024, dropout_rate=0.5,
+    #                      plot_file='./docs/images/MLPmodel.png')
 
     DCN = DeepCrossNetwork(
         vocab_file='data/vocab/vocab_all_data_thresh0.pkl',
@@ -40,13 +41,23 @@ if __name__ == '__main__':
         log_dir=logdir, histogram_freq=1, update_freq=3000,
         embeddings_freq=1)
     print(f'Running model')
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        f'{DCN.save_path}/checkpoint.model.keras',
+        monitor='val_loss',
+        verbose=0,
+        save_best_only=False,
+        save_weights_only=False,
+        mode='auto',
+        save_freq='epoch',
+        initial_value_threshold=None
+    )
     DCN.history = DCN.model.fit(
         x=input_train,
         y=target_train,
         batch_size=256,
         # batch_size=256,
         epochs=10,
-        callbacks=[tb_callback],
+        callbacks=[tb_callback, checkpoint],
         # validation_split=0.1,
         validation_data=(input_valid, target_valid)
     )
