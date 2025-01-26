@@ -51,6 +51,30 @@ class CrossLayerBlock(tf.keras.Model):
         return x
 
 
+class MLPBlock(tf.keras.Model):
+    def __init__(
+            self, n_layers: int = 5, units: int = 1024, drop_rate: float = 0.5,
+            *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.n_layers = n_layers
+        self.units = units
+        self.drop_rate = drop_rate
+        self.dense_layers = []
+        self.drop_layers = []
+        for i in range(self.n_layers):
+            self.dense_layers.append(layers.Dense(
+                self.units, activation=relu, name=f'dense{i}'))
+            self.drop_layers.append(layers.Dropout(
+                rate=self.drop_rate, name=f'drop{i}'))
+
+    def call(self, inputs):
+        x = inputs
+        for dense, dropout in zip(self.dense_layers, self.drop_layers):
+            x = dense(x)
+            x = dropout(x)
+        return x
+
+
 class CategoricalEmbeddingBlock(tf.keras.layers.Layer):
 
     def __init__(self, feat_name: str,
@@ -117,7 +141,6 @@ class DeepCrossNetwork:
         self.model = None
         self.input_layer = []
         self.output_layer = []
-        # self.layers = {}
 
     def clear_model(self):
         """Required step if creating model more than once."""
@@ -149,13 +172,13 @@ class DeepCrossNetwork:
             feature_stack)
 
         # Create MLP block
-        x = feature_stack_layer
-        for i in range(dense_layers):
-            x = layers.Dense(units=units, activation=relu, name=f'dense{i}')(x)
-            x = layers.Dropout(rate=dropout_rate, name=f'drop{i}')(x)
+        self.submodels['mlp_block'] = MLPBlock(
+            n_layers=5, units=1024, drop_rate=0.5)
+        mlp_layer_output = self.submodels['mlp_block'](feature_stack_layer)
 
+        # output layer
         output_layer = layers.Dense(
-            units=1, activation=sigmoid, name='output_layer')(x)
+            units=1, activation=sigmoid, name='output_layer')(mlp_layer_output)
         self.output_layer = output_layer
         self.model = tf.keras.Model(
             inputs=self.input_layer, outputs=output_layer, name='MLP_model')
@@ -190,11 +213,9 @@ class DeepCrossNetwork:
             feature_stack)
 
         # Create MLP block
-        x = feature_stack_layer
-        for i in range(dense_layers):
-            x = layers.Dense(units=units, activation=relu, name=f'dense{i}')(x)
-            x = layers.Dropout(rate=dropout_rate, name=f'drop{i}')(x)
-        mlp_output_layer = x
+        self.submodels['mlp_block'] = MLPBlock(
+            n_layers=5, units=1024, drop_rate=0.5)
+        mlp_layer_output = self.submodels['mlp_block'](feature_stack_layer)
 
         # cross network block
         self.submodels['cross_block'] = CrossLayerBlock(
@@ -202,7 +223,9 @@ class DeepCrossNetwork:
         cross_block = self.submodels['cross_block'](feature_stack_layer)
         cross_layer_output = self.submodels['cross_block'](feature_stack_layer)
         concat2 = layers.Concatenate(name='concat_layer2')(
-            [cross_layer_output, mlp_output_layer])
+            [cross_layer_output, mlp_layer_output])
+
+        # output layer
         output_layer = layers.Dense(
             units=1, activation=sigmoid, name='output_layer')(concat2)
         self.output_layer = output_layer
