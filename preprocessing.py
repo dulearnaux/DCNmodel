@@ -91,9 +91,10 @@ if __name__ == '__main__':
         for THRESHOLD in thresholds:
             values = counts[counts > THRESHOLD].index.values
             vocab_size[col] = len(np.unique(values))
-            vocab[col] = np.unique(values)
+            vocab[col] = np.unique(values).tolist()
             print(f'Column {col} cardinality = {vocab_size[col]}, t={time.time()/60 - tic/60: .4}')
             pd.Series(vocab_size).to_csv(f'data/vocab/vocabs_all_data_thresh{THRESHOLD}.csv')
             with open(f'data/vocab/vocab_all_data_thresh{THRESHOLD}.pkl', 'wb') as fp:
+                # Dict[List[int]]
                 pickle.dump(vocab, fp)
         print(f'saved data for {col=}')
