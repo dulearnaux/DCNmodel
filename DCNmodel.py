@@ -75,42 +75,6 @@ class MLPBlock(tf.keras.Model):
         return x
 
 
-class CategoricalEmbeddingBlock(tf.keras.layers.Layer):
-
-    def __init__(self, feat_name: str,
-                 feat_vocab: List[int],
-                 # feat_vocab: npt.NDArray[np.int_],
-                 *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.feat_name = feat_name
-        self.feat_vocab = feat_vocab
-        self.embed_dim = int(6*len(feat_vocab)**0.25)
-        # self.input_layer = None
-        self.encode_layer = None
-        self.embed_layer = None
-
-    def build(self, input_shape):
-        self.encode_layer = layers.IntegerLookup(
-            vocabulary=self.feat_vocab, num_oov_indices=1,
-            output_mode='int', name=f'idx_{self.feat_name}', dtype=INTS)
-        self.embed_layer = layers.Embedding(
-            input_dim=len(self.feat_vocab) + 1,
-            output_dim=self.embed_dim,
-            name=f'emb_{self.feat_name}')
-
-    def call(self, inputs):
-        x = self.encode_layer(inputs)
-        x = self.embed_layer(x)
-        return x
-
-    # def get_config(self):
-    #     config = super().get_config()
-    #     config.update({
-    #         'feat_name': self.feat_name,
-    #         'feat_vocab': self.feat_vocab
-    #     })
-    #     return config
-
 
 class DeepCrossNetwork:
 
@@ -148,6 +112,24 @@ class DeepCrossNetwork:
         self.input_layer = []
         self.output_layer = []
 
+    def create_feature_embedding(self, feat_name: str):
+        """Creates graph from input to embedding for categorical features."""
+        input_layer = layers.Input(shape=(1,), name=feat_name)
+        # this is needed when specifying model.
+        self.input_layer.append(input_layer)
+        encode_layer = layers.IntegerLookup(
+            vocabulary=self.vocabs[feat_name], num_oov_indices=1,
+            output_mode='int', name=f'idx_{feat_name}', dtype=INTS)
+        embed_layer = layers.Embedding(
+            input_dim=len(self.vocabs[feat_name]) + 1,
+            output_dim=self.embed_dims[feat_name],
+            name=f'emb_{feat_name}')
+
+        # connect the layers
+        x = encode_layer(input_layer)  # first input is integer_inputs
+        x = embed_layer(x)
+        return x
+
     def create_mlp_model(self, dense_layers: int, units: int,
                          dropout_rate: float = 0.5, plot_file: str = None):
         """Vanilla MLP. 5 dense layers, size of 1024."""
@@ -158,27 +140,24 @@ class DeepCrossNetwork:
             shape=(1, len(self.numeric_cols),), name='numeric_inputs',
             dtype=INTS)
         self.input_layer.append(numeric_inputs)
-        for col in self.categorical_cols:
-            self.input_layer.append(layers.Input(shape=(1,), name=col))
-        feature_stack = [numeric_inputs]
 
         # Create embeddings for categorical features
-        self.submodels['cat_features'] = {}
-        for col, inputs in zip(self.categorical_cols, self.input_layer[1:]):
-            self.submodels['cat_features'][col] = CategoricalEmbeddingBlock(
-                feat_name=col, feat_vocab=self.vocabs[col])
-            feature_stack.append(self.submodels['cat_features'][col](inputs))
+        cat_embeddings = []
+        for col in self.categorical_cols:
+            cat_embeddings.append(self.create_feature_embedding(col))
+        # numeric features go first, then all cat features
+        cat_embeddings.insert(0, numeric_inputs)
         feature_stack_layer = layers.Concatenate(name='concat_layer')(
-            feature_stack)
+            cat_embeddings)
 
         # Create MLP block
         self.submodels['mlp_block'] = MLPBlock(
             n_layers=5, units=1024, drop_rate=0.5)
         mlp_layer_output = self.submodels['mlp_block'](feature_stack_layer)
-
         # output layer
         output_layer = layers.Dense(
             units=1, activation=sigmoid, name='output_layer')(mlp_layer_output)
+
         self.output_layer = output_layer
         self.model = tf.keras.Model(
             inputs=self.input_layer, outputs=output_layer, name='MLP_model')
@@ -186,31 +165,28 @@ class DeepCrossNetwork:
         if plot_file:
             tf.keras.utils.plot_model(
                 self.model, to_file=plot_file, show_shapes=True,
-                show_layer_names=True)
+                expand_nested=True, show_layer_names=True)
 
     def create_DCN_model(
             self, cross_layers: int, dense_layers: int, units: int,
             dropout_rate: float = 0.5, plot_file: str = None):
         """Cross network in parallel with MLP"""
         self.clear_model()
-
-        # create feature inputs, numeric and categorical
+        # Numeric and embedding concatenation feeds into both cross and MLP
+        # streams
         numeric_inputs = layers.Input(
             shape=(1, len(self.numeric_cols),), name='numeric_inputs',
             dtype=INTS)
         self.input_layer.append(numeric_inputs)
-        for col in self.categorical_cols:
-            self.input_layer.append(layers.Input(shape=(1,), name=col))
 
-        feature_stack = [numeric_inputs]
-        # Create embeddings for categorical features
-        self.submodels['cat_features'] = {}
-        for col, inputs in zip(self.categorical_cols, self.input_layer[1:]):
-            self.submodels['cat_features'][col] = CategoricalEmbeddingBlock(
-                feat_name=col, feat_vocab=self.vocabs[col])
-            feature_stack.append(self.submodels['cat_features'][col](inputs))
+        cat_embeddings = []
+        for col in self.categorical_cols:
+            cat_embeddings.append(self.create_feature_embedding(col))
+
+        # numeric features go first, then all cat features
+        cat_embeddings.insert(0, numeric_inputs)
         feature_stack_layer = layers.Concatenate(name='concat_layer')(
-            feature_stack)
+            cat_embeddings)
 
         # Create MLP block
         self.submodels['mlp_block'] = MLPBlock(
@@ -235,7 +211,7 @@ class DeepCrossNetwork:
         if plot_file:
             tf.keras.utils.plot_model(
                 self.model, to_file=plot_file, show_shapes=True,
-                show_layer_names=True)
+                expand_nested=True, show_layer_names=True)
 
     def compile_model(self):
         self.model.compile(
