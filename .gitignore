@@ -2,6 +2,5 @@
 .idea/
 data/
 /logs/
-/model/*.pkl
-/model/*.keras
+/model/
 /.python-version

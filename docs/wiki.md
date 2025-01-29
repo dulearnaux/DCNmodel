@@ -4,18 +4,18 @@ The data source claims the data is composed of 13 integer features and 26
 categorical features.
 
 The integer features appear to be normalized already. They are all between 0-1.
-![hist_int_vars](docs/images/hist_int_vars.png)
+![hist_int_vars](../docs/images/hist_int_vars.png)
 
 For the sample data, the categorical variables all have different ranges and the
 cardinality ranges from 3 to over 20_000.
-![hist_cat_vars](docs/images/hist_cat_vars.png)
-![cardinality_bar_chart](docs/images/cardinality_bar_chart.png)
+![hist_cat_vars](../docs/images/hist_cat_vars.png)
+![cardinality_bar_chart](../docs/images/cardinality_bar_chart.png)
 
 The paper states that the dimension of embeddings for categorical features is
 `6 x (category cardinality)**0.25`. For simplicity, it's assumed that this also
 applies to low cardinality features, so that embedding dim is larger than the
 cardinality of these.
-![embed_dims_bar_chart](docs/images/embed_dims_bar_chart.png)
+![embed_dims_bar_chart](../docs/images/embed_dims_bar_chart.png)
 
 Total number of features we end up with is 1005 + 13 = 1018. The paper claims
 1026 total features though.
@@ -24,7 +24,7 @@ Total number of features we end up with is 1005 + 13 = 1018. The paper claims
 
 ### Model Architecture Details 
 
-A vanila MLP ("MLP") and the Deep Cross Network with MLP ("DCN") in the paper
+A vanilla MLP ("MLP") and the Deep Cross Network with MLP ("DCN") in the paper
 are implemented.
 
 * Real valued features are log transformed in the paper. But the data set comes 

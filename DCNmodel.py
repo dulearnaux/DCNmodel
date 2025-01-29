@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
-from tensorflow.keras.activations import relu, sigmoid, tanh, linear
+from tensorflow.keras.activations import relu, sigmoid
 
 INTS = tf.int32
 FLOATS = tf.float32
@@ -15,6 +15,8 @@ FLOATS = tf.float32
 class CrossLayer(tf.keras.layers.Layer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.w = None
+        self.b = None
 
     def build(self, input_shape):
         self.w = self.add_weight(
@@ -52,6 +54,7 @@ class CrossLayerBlock(tf.keras.Model):
 
 
 class MLPBlock(tf.keras.Model):
+    """Block of (dense, dropout) layers."""
     def __init__(
             self, n_layers: int = 5, units: int = 1024, drop_rate: float = 0.5,
             *args, **kwargs):
@@ -75,9 +78,11 @@ class MLPBlock(tf.keras.Model):
         return x
 
 
-
 class DeepCrossNetwork:
+    """Creates the Deep Cross Network in the 2017 paper by Wang et al.
 
+    See https://arxiv.org/pdf/1708.05123
+    """
     def __init__(
             self, vocab_file: str = 'data/vocab/vocab_all_data_thresh10.pkl',
             save_path='model/my_model'
@@ -130,7 +135,7 @@ class DeepCrossNetwork:
         x = embed_layer(x)
         return x
 
-    def create_mlp_model(self, dense_layers: int, units: int,
+    def create_mlp_model(self, dense_layers: int = 5, units: int = 1024,
                          dropout_rate: float = 0.5, plot_file: str = None):
         """Vanilla MLP. 5 dense layers, size of 1024."""
         self.clear_model()
@@ -152,7 +157,9 @@ class DeepCrossNetwork:
 
         # Create MLP block
         self.submodels['mlp_block'] = MLPBlock(
-            n_layers=5, units=1024, drop_rate=0.5)
+            n_layers=dense_layers, units=units, drop_rate=dropout_rate,
+            name=f'mlp_block_n_{dense_layers}'
+        )
         mlp_layer_output = self.submodels['mlp_block'](feature_stack_layer)
         # output layer
         output_layer = layers.Dense(
@@ -167,9 +174,10 @@ class DeepCrossNetwork:
                 self.model, to_file=plot_file, show_shapes=True,
                 expand_nested=True, show_layer_names=True)
 
-    def create_DCN_model(
-            self, cross_layers: int, dense_layers: int, units: int,
-            dropout_rate: float = 0.5, plot_file: str = None):
+    def create_dcn_model(
+            self, cross_layers: int = 6, dense_layers: int = 2,
+            units: int = 1024, dropout_rate: float = 0.5,
+            plot_file: str = None):
         """Cross network in parallel with MLP"""
         self.clear_model()
         # Numeric and embedding concatenation feeds into both cross and MLP
@@ -190,13 +198,13 @@ class DeepCrossNetwork:
 
         # Create MLP block
         self.submodels['mlp_block'] = MLPBlock(
-            n_layers=5, units=1024, drop_rate=0.5)
+            n_layers=dense_layers, units=units, drop_rate=dropout_rate,
+            name=f'mlp_block_n_{dense_layers}')
         mlp_layer_output = self.submodels['mlp_block'](feature_stack_layer)
 
         # cross network block
         self.submodels['cross_block'] = CrossLayerBlock(
-            n_layers=6, name=f'cross_layer_block_n_{cross_layers}')
-        cross_block = self.submodels['cross_block'](feature_stack_layer)
+            n_layers=cross_layers, name=f'cross_layer_block_n_{cross_layers}')
         cross_layer_output = self.submodels['cross_block'](feature_stack_layer)
         concat2 = layers.Concatenate(name='concat_layer2')(
             [cross_layer_output, mlp_layer_output])
@@ -213,17 +221,17 @@ class DeepCrossNetwork:
                 self.model, to_file=plot_file, show_shapes=True,
                 expand_nested=True, show_layer_names=True)
 
-    def compile_model(self):
+    def compile_model(self, learning_rate: float = 0.001):
         self.model.compile(
             loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
-            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+            optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
             metrics=[tf.keras.metrics.AUC(),
                      tf.keras.metrics.BinaryAccuracy(threshold=0.25)],
         )
 
     def save_model(self):
         # saves the model separately from the DeepCrossNetwork object.
-        keras_path = self.save_path+'.keras'
+        keras_path = self.save_path+'/model.keras'
         if os.path.exists(keras_path):
             print(f'overwriting: {keras_path}')
         else:
@@ -232,7 +240,7 @@ class DeepCrossNetwork:
 
     def load_model(self):
         # saves the model separately from the DeepCrossNetwork object.
-        keras_path = self.save_path+'.keras'
+        keras_path = self.save_path+'/model.keras'
         if not os.path.exists(keras_path):
             print(f'no file found at: {keras_path}')
             print(f'Cannot load model.')

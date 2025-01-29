@@ -29,6 +29,8 @@ Other papers on this data set can be found [here](https://paperswithcode.com/sot
 
 ## Install
 
+See `getting_started.sh`. 
+
 You will need to install `poetry` if you don't have it. See 
 [https://python-poetry.org/docs/](https://python-poetry.org/docs/).
 
