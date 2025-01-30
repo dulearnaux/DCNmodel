@@ -108,14 +108,17 @@ class DeepCrossNetwork:
         self.submodels = {}
 
         self.model = None
+        self.history = None
         self.input_layer = []
         self.output_layer = []
 
     def clear_model(self):
         """Required step if creating model more than once."""
         self.model = None
+        self.history = None
         self.input_layer = []
         self.output_layer = []
+        self.submodels = {}
 
     def create_feature_embedding(self, feat_name: str):
         """Creates graph from input to embedding for categorical features."""
@@ -246,6 +249,17 @@ class DeepCrossNetwork:
             print(f'Cannot load model.')
         else:
             self.model = tf.keras.models.load_model(keras_path)
+
+    def save_history(self):
+        csv_path = self.save_path + '/history.csv'
+        hist_df = pd.DataFrame(self.history.history)
+        if os.path.exists(csv_path):
+            print(f'overwriting: {csv_path}')
+        else:
+            print(f'saving tf.keras.model to {csv_path}')
+
+        with open(csv_path, mode='w') as f:
+            hist_df.to_csv(f, index_label='epoch')
 
 
 def create_input_data(

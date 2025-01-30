@@ -47,3 +47,13 @@ Optimal DCN hyperparameters used:
 
 Optimal MLP hyperparameters used:
 * `5` deep layers of size `1024`
+
+## Training Resulst
+
+### Deep Cross Network
+
+![training_metrics_dcn](../model/DCN_vocab00/training_history_plot.png)
+
+### MLP without Cross Features 
+
+![training_metrics_mlp](../model/MLP_vocab00/training_history_plot.png)

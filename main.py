@@ -3,6 +3,8 @@ import os
 import pickle
 
 import tensorflow as tf
+import pandas as pd
+import matplotlib.pyplot as plt
 
 from DCNmodel import DeepCrossNetwork
 
@@ -32,6 +34,7 @@ if __name__ == '__main__':
         shutil.rmtree(logdir)
         os.mkdir(logdir)
 
+    # Define callbacks
     tb_callback = tf.keras.callbacks.TensorBoard(
         log_dir=logdir, histogram_freq=1, update_freq=3000,
         embeddings_freq=1)
@@ -45,6 +48,9 @@ if __name__ == '__main__':
         save_freq='epoch',
         initial_value_threshold=None
     )
+    # Save metrics to CSV file for easy plotting.
+    csv_logger = tf.keras.callbacks.CSVLogger(
+        f'{DCN.save_path}/training_log_metrics.csv')
 
     print(f'Training model')
     BATCH_SIZE = 128
@@ -55,22 +61,45 @@ if __name__ == '__main__':
     DCN.history = DCN.model.fit(
         x=train.take(10_000).batch(BATCH_SIZE),
         epochs=10,
-        callbacks=[tb_callback, checkpoint],
+        callbacks=[tb_callback, checkpoint, csv_logger],
         validation_data=train.batch(BATCH_SIZE),
         validation_steps=100_000//BATCH_SIZE
     )
 
-    # save tf.keras.Model object
-    DCN.save_model()
+    DCN.save_model()  # save tf.keras.Model object
+    DCN.save_history()  # save history.history as csv.
     # save the rest of the DeepCrossNetwork custom object.
     with open(DCN.save_path+'/model.pkl', 'wb') as fp:
         pickle.dump(DCN, fp)
 
     # load pickle, then load model into the DeepCrossNetwork object.
-    # with open('model/DCN_vocab00/model.pkl', 'rb') as fp:
-    #     NEW = pickle.load(fp)
-    #
-    # NEW.model = tf.keras.models.load_model(
-    #     NEW.save_path+'/checkpoint.model.04.keras')
-    # NEW.model.summary()
-    # NEW.model
+    with open('model/MLP_vocab00/model.pkl', 'rb') as fp:
+        NEW = pickle.load(fp)
+
+    NEW.model = tf.keras.models.load_model(
+        NEW.save_path + '/checkpoint.model.04.keras')
+    NEW.model.summary()
+    NEW.save_history()
+
+    # Create a plot of training history with 3 panels
+    df = pd.read_csv(NEW.save_path + '/history.csv')
+    metrics = [col for col in df.columns if
+               not col.startswith('epoch') and not col.startswith('val_')]
+    plt.figure(figsize=(15, 12))
+    for i, metric in enumerate(metrics):
+        plt.subplot(3, 1, i + 1)
+        plt.plot(df['epoch'], df[metric], marker='o', label=f'{metric}')
+        plt.plot(df['epoch'], df[f'val_{metric}'], marker='x',
+                 label=f'val_{metric}')
+        plt.title(f'{metric} vs epoch')
+        plt.xlabel('Epoch')
+        plt.ylabel(metric)
+        plt.ylim(0, 1)  # Set y-axis scale between 0 and 1
+        # Ensure x-axis labels show integers
+        plt.xticks(df['epoch'])
+        plt.grid(axis='x', which='both')  # Add grid only for x-axis
+        plt.legend()
+        plt.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(NEW.save_path + '/training_history_plot.png')
