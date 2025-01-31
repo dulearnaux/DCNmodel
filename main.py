@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     # create input data
     valid = tf.data.Dataset.load('data/tfdata/valid.data')
-    train = tf.data.Dataset.load('data/tfdata/sample.data')
+    train = tf.data.Dataset.load('data/tfdata/train.data')
 
     logdir = f'./logs/tensorboard/{DCN.save_path}'
     print(f'make sure you started tensorboard in a separate process. E.g. in'
@@ -53,16 +53,16 @@ if __name__ == '__main__':
         f'{DCN.save_path}/training_log_metrics.csv')
 
     print(f'Training model')
-    BATCH_SIZE = 128
+    BATCH_SIZE = 128*2
     # LR is halfway between SQRT and linear increase.
     LR = 0.001*((BATCH_SIZE/128)**0.75)
     DCN.compile_model(learning_rate=LR)
     DCN.model.summary()
     DCN.history = DCN.model.fit(
-        x=train.take(10_000).batch(BATCH_SIZE),
+        x=train.batch(BATCH_SIZE),
         epochs=10,
         callbacks=[tb_callback, checkpoint, csv_logger],
-        validation_data=train.batch(BATCH_SIZE),
+        validation_data=valid.batch(BATCH_SIZE),
         validation_steps=100_000//BATCH_SIZE
     )
 
@@ -72,17 +72,17 @@ if __name__ == '__main__':
     with open(DCN.save_path+'/model.pkl', 'wb') as fp:
         pickle.dump(DCN, fp)
 
-    # load pickle, then load model into the DeepCrossNetwork object.
-    with open('model/MLP_vocab00/model.pkl', 'rb') as fp:
-        NEW = pickle.load(fp)
-
-    NEW.model = tf.keras.models.load_model(
-        NEW.save_path + '/checkpoint.model.04.keras')
-    NEW.model.summary()
-    NEW.save_history()
+    # # load pickle, then load model into the DeepCrossNetwork object.
+    # with open('model/MLP_vocab00/model.pkl', 'rb') as fp:
+    #     NEW = pickle.load(fp)
+    #
+    # NEW.model = tf.keras.models.load_model(
+    #     NEW.save_path + '/checkpoint.model.04.keras')
+    # NEW.model.summary()
+    # NEW.save_history()
 
     # Create a plot of training history with 3 panels
-    df = pd.read_csv(NEW.save_path + '/history.csv')
+    df = pd.read_csv(DCN.save_path + '/history.csv')
     metrics = [col for col in df.columns if
                not col.startswith('epoch') and not col.startswith('val_')]
     plt.figure(figsize=(15, 12))
@@ -102,4 +102,4 @@ if __name__ == '__main__':
         plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig(NEW.save_path + '/training_history_plot.png')
+    plt.savefig(DCN.save_path + '/training_history_plot.png')
