@@ -21,6 +21,7 @@ matplotlib = "*"
 ipython = "*"
 pandas = "*"
 numpy = "*"
+tensorboard_plugin_profile = "*"
 
 # If you want to use GPU. Slow to download. Runs much faster.
 [tool.poetry.group.nvidia.dependencies]

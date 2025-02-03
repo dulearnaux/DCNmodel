@@ -3,7 +3,6 @@ import pickle
 import os
 
 import pandas as pd
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras.activations import relu, sigmoid
@@ -89,13 +88,11 @@ class DeepCrossNetwork:
     ):
         """Creates the max vocab size for each categorical feature."""
         self.save_path = save_path
+        self.vocab_file = vocab_file
+        if not os.path.exists(self.save_path):
+            os.mkdir(self.save_path)
         with open(vocab_file, 'rb') as fp:
-            # Dict[List[int]]
             self.vocabs = pickle.load(fp)
-        # convert from Dict[str: npt.NDArray[np.int_]] to # Dict[List[int]]
-        if isinstance(list(self.vocabs.values())[0], np.ndarray):
-            for col, vocab in self.vocabs.items():
-                self.vocabs[col] = vocab.tolist()
 
         self.embed_dims = {}
         for col, vocab in self.vocabs.items():

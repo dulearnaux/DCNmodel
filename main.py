@@ -16,11 +16,11 @@ if __name__ == '__main__':
     # DCN.create_mlp_model(dense_layers=5, units=1024, dropout_rate=0.5,
     #                      plot_file='./docs/images/MLP_vocab00.png')
     DCN = DeepCrossNetwork(
-        vocab_file='data/vocab/vocab_all_data_thresh0.pkl',
-        save_path='model/DCN_vocab00')
+        vocab_file='data/vocab/vocab_all_data_thresh100.pkl',
+        save_path='model/DCN_shuffle')
     DCN.create_dcn_model(
         cross_layers=6, dense_layers=2, units=1024, dropout_rate=0.5,
-        plot_file='./docs/images/DCN_vocab00.png')
+        plot_file='./docs/images/DCN_shuffle.png')
 
     # create input data
     valid = tf.data.Dataset.load('data/tfdata/valid.data')
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     # Define callbacks
     tb_callback = tf.keras.callbacks.TensorBoard(
         log_dir=logdir, histogram_freq=1, update_freq=3000,
-        embeddings_freq=1)
+        embeddings_freq=1, write_graph=True)
     checkpoint = tf.keras.callbacks.ModelCheckpoint(
         f'{DCN.save_path}/checkpoint.model'+'.{epoch:02d}.keras',
         monitor='val_loss',
@@ -51,18 +51,17 @@ if __name__ == '__main__':
     # Save metrics to CSV file for easy plotting.
     csv_logger = tf.keras.callbacks.CSVLogger(
         f'{DCN.save_path}/training_log_metrics.csv')
-
     print(f'Training model')
-    BATCH_SIZE = 128*2
+    BATCH_SIZE = 128
     # LR is halfway between SQRT and linear increase.
     LR = 0.001*((BATCH_SIZE/128)**0.75)
     DCN.compile_model(learning_rate=LR)
     DCN.model.summary()
     DCN.history = DCN.model.fit(
-        x=train.batch(BATCH_SIZE),
+        x=train.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE),
         epochs=10,
         callbacks=[tb_callback, checkpoint, csv_logger],
-        validation_data=valid.batch(BATCH_SIZE),
+        validation_data=valid.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE),
         validation_steps=100_000//BATCH_SIZE
     )
 

@@ -1,3 +1,5 @@
+import os
+import time
 import subprocess
 import pickle
 
@@ -59,7 +61,7 @@ if __name__ == '__main__':
 
     # Calculate embedding dims
     embed_dims = (6*df[cat_cols].nunique()**0.25).apply(int)
-    embed_dims.to_csv('data/embed_dims.csv', header=['embed_dim'],
+    embed_dims.to_csv('data/vocab/embed_dims_sample.csv', header=['embed_dim'],
                       index_label='feature')
     fig, axis = plt.subplots(1, 1, figsize=(8, 8))
     embed_dims.plot.bar()
@@ -73,28 +75,31 @@ if __name__ == '__main__':
     (embed_dims.apply(lambda x: int(6 * (x ** 0.25)))*embed_dims).sum()
     # single embedding for all features combined
     int(int(6*(embed_dims.sum()**0.25))*embed_dims.sum())
+    df[cat_cols].nunique().to_csv('data/vocab/vocabs_sample.csv')
 
     # Save vocab sizes for various samples and thresholds
-    df[cat_cols].nunique().to_csv('data/vocabs_sample.csv')
-    # check against full file
-    vocab_size = {}
-    # col_dtypes = [np.float32]*len(int_cols) + [np.int16]*len(cat_cols)
     thresholds = [0, 10, 100, 1000, 10000]
-    vocab = {}
-    import time
-
+    vocab = {threshold : {} for threshold in thresholds}
+    vocab_size = {threshold: {} for threshold in thresholds}
+    if not os.path.exists('data/vocab'):
+        os.makedirs('data/vocab')
     for col in cat_cols:  # skip labels
         # remove
         tic = time.time()
         df_col = pd.read_csv('data/Criteo_x1/train.csv', usecols=[col], header=0, engine="c", dtype=np.int64)
         counts = df_col[col].value_counts()
-        for THRESHOLD in thresholds:
-            values = counts[counts > THRESHOLD].index.values
-            vocab_size[col] = len(np.unique(values))
-            vocab[col] = np.unique(values).tolist()
-            print(f'Column {col} cardinality = {vocab_size[col]}, t={time.time()/60 - tic/60: .4}')
-            pd.Series(vocab_size).to_csv(f'data/vocab/vocabs_all_data_thresh{THRESHOLD}.csv')
-            with open(f'data/vocab/vocab_all_data_thresh{THRESHOLD}.pkl', 'wb') as fp:
-                # Dict[List[int]]
-                pickle.dump(vocab, fp)
-        print(f'saved data for {col=}')
+        for threshold in thresholds:
+            values = counts[counts > threshold].index.values
+            vocab_size[threshold][col] = len(np.unique(values))
+            vocab[threshold][col] = np.unique(values).tolist()
+            print(f'Column {col} cardinality = {vocab_size[threshold][col]}, t={time.time() / 60 - tic / 60: .4}')
+
+    print('Saving vocab files...')
+    for threshold in thresholds:
+        pd.Series(vocab_size[threshold]).to_csv(
+            f'data/vocab/vocabs_all_data_thresh{threshold}.csv')
+        with open(
+                f'data/vocab/vocab_all_data_thresh{threshold}.pkl', 'wb') as fp:
+            # Save a Dict[List[int]]
+            pickle.dump(vocab[threshold], fp)
+        print(f'saved data for {threshold=}')

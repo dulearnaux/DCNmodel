@@ -485,6 +485,22 @@ files = [
 protobuf = ["grpcio-tools (>=1.70.0)"]
 
 [[package]]
+name = "gviz-api"
+version = "1.10.0"
+description = "Python API for Google Visualization"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "python_version == \"3.11\" or python_version >= \"3.12\""
+files = [
+    {file = "gviz_api-1.10.0-py2.py3-none-any.whl", hash = "sha256:a05055fed8c279f34f4b496eace7648c7fe9c1b06851e8a36e748541f1adbb05"},
+    {file = "gviz_api-1.10.0.tar.gz", hash = "sha256:846692dd8cc73224fc31b18e41589bd934e1cc05090c6576af4b4b26c2e71b90"},
+]
+
+[package.dependencies]
+six = "*"
+
+[[package]]
 name = "h5py"
 version = "3.12.1"
 description = "Read and write HDF5 files from Python"
@@ -1922,6 +1938,26 @@ files = [
 ]
 
 [[package]]
+name = "tensorboard-plugin-profile"
+version = "2.13.0"
+description = "Profile Tensorboard Plugin"
+optional = false
+python-versions = ">= 2.7, != 3.0.*, != 3.1.*"
+groups = ["main"]
+markers = "python_version == \"3.11\" or python_version >= \"3.12\""
+files = [
+    {file = "tensorboard_plugin_profile-2.13.0-py3-none-any.whl", hash = "sha256:04f1e47a2661e3ada2a013f322e39e0f3572edd6c7e7b7c7022bb60bf4796553"},
+    {file = "tensorboard_plugin_profile-2.13.0.tar.gz", hash = "sha256:b9d5f2337a6b1d672143a7e14b4fc7906197a0aafb71c053684e6a6027faef76"},
+]
+
+[package.dependencies]
+gviz-api = ">=1.9.0"
+protobuf = ">=3.19.0"
+setuptools = ">=41.0.0"
+six = ">=1.10.0"
+werkzeug = ">=0.11.15"
+
+[[package]]
 name = "tensorflow"
 version = "2.18.0"
 description = "TensorFlow is an open source machine learning framework for everyone."
@@ -2228,4 +2264,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11, <3.13"
-content-hash = "711185eda68cfa61248fc5e4e64c8df56d0650321fb2ceade2555acc54b04a0f"
+content-hash = "5539be32fcd36cb88c6578e07dd1175e8c3815afb72a221a74a0d23256f7f786"
