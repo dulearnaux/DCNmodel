@@ -6,6 +6,12 @@ import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Mixed float16 used float32 on the variables, but float16 for compute in the
+# GPU. This can lead to minor speed-ups due to lower memory requirements and
+# major speed-ups, 3x, on some compatible NVIDIA GPUs.
+# policy = tf.keras.mixed_precision.Policy('mixed_float16')
+# tf.keras.mixed_precision.set_global_policy(policy)
+
 from DCNmodel import DeepCrossNetwork
 
 if __name__ == '__main__':

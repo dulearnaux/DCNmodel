@@ -211,7 +211,11 @@ class DeepCrossNetwork:
 
         # output layer
         output_layer = layers.Dense(
-            units=1, activation=sigmoid, name='output_layer')(concat2)
+            units=1, activation=None, name='output_layer')(concat2)
+        # Using float16 on output layer can load to instability. Need to ensure
+        # output layer is float32, even if upstream variables are not.
+        output_layer = layers.Activation(
+            'sigmoid', dtype=tf.float32)(output_layer)
         self.output_layer = output_layer
         self.model = tf.keras.Model(
             inputs=self.input_layer, outputs=output_layer, name='DCN_model')
