@@ -1,6 +1,7 @@
 from typing import List
 import pickle
 import os
+import time
 
 import pandas as pd
 import tensorflow as tf
@@ -11,6 +12,66 @@ INTS = tf.int32
 FLOATS = tf.float32
 
 
+class TensorboardOnNthBatch(tf.keras.callbacks.TensorBoard):
+    """Same as Tensorboard callback, except logs validation and distribution
+        metrics every `log_every_n_steps`."""
+
+    def __init__(self, val_data, log_every_n_steps=1, histogram_freq=1,
+                 embedding_freq=1, *args, **kwargs):
+        # Force Tensorboard to not write distributions on epoch end. Write every
+        # n steps instead if they are passed to __init__. If you write
+        # distributions on epoch end as well, it will delete the intra-epoch
+        # distributions.
+        super().__init__(histogram_freq=0, embeddings_freq=0, *args, **kwargs)
+        self.N = log_every_n_steps
+        self.val_eval_count = 0
+        self.step = 0
+        self.val_data = val_data
+        # Cannot call these 'histogram_freq' to not override TensorBoard class.
+        self.histogram_freq_n_step = histogram_freq
+        self.embedding_freq_n_step = embedding_freq
+
+    def on_train_batch_end(self, batch, logs=None):
+        self.step += 1
+
+        # Code copied from original TensorBoard.on_train_batch_end
+        if self._should_write_train_graph:
+            self._write_keras_model_train_graph()
+            self._should_write_train_graph = False
+        if self.write_steps_per_second:
+            batch_run_time = time.time() - self._batch_start_time
+            self.summary.scalar(
+                "batch_steps_per_second",
+                1.0 / batch_run_time,
+                step=self._train_step,
+            )
+
+        # Every N steps, generate validation metrics, and also for first step.
+        if self.step % self.N == 0 or self.step == 1:
+            self.val_eval_count =+ 1
+            val_logs = self.model.evaluate(
+                x=self.val_data, return_dict=True, verbose=0)
+            val_logs = {"val_" + name: val for name, val in val_logs.items()}
+            logs.update(val_logs)
+
+            # From tensorboard source code.
+            if self.histogram_freq_n_step:
+                self._log_weights(self.step)
+            if self.embedding_freq_n_step:
+                self._log_embeddings(self.step)
+
+        # More code copied from TensorBoard source code.
+        # `logs` isn't necessarily always a dict
+        if isinstance(logs, dict):
+            for name, value in logs.items():
+                self.summary.scalar(
+                    "batch_" + name, value, step=self.step
+                )
+        if not self._should_trace:
+            return
+        if self._is_tracing and self._global_train_batch >= self._stop_batch:
+            self._stop_trace()
+
 class CrossLayer(tf.keras.layers.Layer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -19,10 +80,8 @@ class CrossLayer(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.w = self.add_weight(
-            shape=(input_shape[0][-1],),
-            initializer="random_normal",
-            trainable=True,
-        )
+            shape=(input_shape[0][-1],), initializer="random_normal",
+            trainable=True)
         self.b = self.add_weight(
             shape=(input_shape[0][-1],), initializer="random_normal",
             trainable=True)
@@ -53,27 +112,37 @@ class CrossLayerBlock(tf.keras.Model):
 
 
 class MLPBlock(tf.keras.Model):
-    """Block of (dense, dropout) layers."""
+    """Block of (dense, activation, batchNorm, dropout) layers.
+
+    Dropout layers not applied when drop_rate==0 (default).
+    """
     def __init__(
-            self, n_layers: int = 5, units: int = 1024, drop_rate: float = 0.5,
+            self, n_layers: int = 5, units: int = 1024, drop_rate: float = 0,
             *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_layers = n_layers
         self.units = units
         self.drop_rate = drop_rate
         self.dense_layers = []
+        self.batch_norm_layers = []
         self.drop_layers = []
         for i in range(self.n_layers):
             self.dense_layers.append(layers.Dense(
-                self.units, activation=relu, name=f'dense{i}'))
+                self.units, activation=relu, name=f'dense{i}', use_bias=False))
+            self.batch_norm_layers.append(layers.BatchNormalization(
+                name=f'BN{i}'))
+            # Note, if drop_rate == 0, this won't get used.
             self.drop_layers.append(layers.Dropout(
                 rate=self.drop_rate, name=f'drop{i}'))
 
     def call(self, inputs):
         x = inputs
-        for dense, dropout in zip(self.dense_layers, self.drop_layers):
+        for dense, batch_norm, dropout in zip(
+                self.dense_layers, self.batch_norm_layers, self.drop_layers):
             x = dense(x)
-            x = dropout(x)
+            x = batch_norm(x)
+            if self.drop_rate > 0:
+                x = dropout(x)
         return x
 
 
@@ -225,10 +294,12 @@ class DeepCrossNetwork:
                 self.model, to_file=plot_file, show_shapes=True,
                 expand_nested=True, show_layer_names=True)
 
-    def compile_model(self, learning_rate: float = 0.001):
+    def compile_model(
+            self, learning_rate: float = 0.001, clipnorm: float = 1.0):
         self.model.compile(
             loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
-            optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+            optimizer=tf.keras.optimizers.Adam(
+                learning_rate=learning_rate, clipnorm=clipnorm),
             metrics=[tf.keras.metrics.AUC(),
                      tf.keras.metrics.BinaryAccuracy(threshold=0.25)],
         )

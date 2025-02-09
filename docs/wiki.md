@@ -28,7 +28,7 @@ A vanilla MLP ("MLP") and the Deep Cross Network with MLP ("DCN") in the paper
 are implemented.
 
 * Real valued features are log transformed in the paper. But the data set comes 
-  with normalized values already, so nothing is done to them.
+  with normalized numerical values already, so nothing is done to them.
 * Categorical features are OHE and embedded 
   * Embedding dimensions are  `int(6 x (category cardinality)**0.25)`
   * After concatenation, there are `1026` dimensions in the paper. Depending on 
@@ -38,8 +38,12 @@ are implemented.
     * The complete vocabulary is used by default here.
  * Optimizer - `Adam`
  * Batch size - `512` in the paper. `256` here, due to GPU constraints.
- * Learning rate - `[0.0001, ..., 0.001]` in the paper, `0.001` here. 
- * Early stopping at training step 150_000.
+ * Learning rate - `[0.0001, ..., 0.001]` in the paper, `0.0001` here.
+ * **Regularization**:
+   * Paper did early stopping at training step 150_000. We run multiple Epochs.
+   * Batch normalization was applied to the deep network.
+   * According to paper, gradient clip norm was set at 100. We set it to 1.
+   * Dropout layers and L2 regularization was not found effective by the paper.  
 
 Optimal DCN hyperparameters used:
 * `2` deep layers of size `1024`
