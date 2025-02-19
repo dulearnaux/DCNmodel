@@ -9,6 +9,10 @@ import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
+    if not os.path.exists('docs/images'):
+        os.makedirs('docs/images')
+    if not os.path.exists('data/vocab'):
+        os.makedirs('data/vocab')
 
     num_lines = int(subprocess.check_output(
         "/usr/bin/wc -l data/Criteo_x1/train.csv", shell=True).split()[0])

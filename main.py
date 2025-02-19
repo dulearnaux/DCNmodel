@@ -2,6 +2,7 @@ import shutil
 import os
 import pickle
 
+# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 import tensorflow as tf
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -24,10 +25,10 @@ if __name__ == '__main__':
     #                      plot_file='./docs/images/MLP_vocab00.png')
     DCN = DeepCrossNetwork(
         vocab_file='data/vocab/vocab_all_data_thresh100.pkl',
-        save_path='model/DCN_wBN2')
+        save_path='model/DCNv2')
     DCN.create_dcn_model(
-        cross_layers=6, dense_layers=2, units=1024, dropout_rate=0,
-        plot_file='./docs/images/DCN_wBN2.png')
+        cross_layers=6, dense_layers=2, units=1024, dropout_rate=0, use_v2=True,
+        plot_file='./docs/images/DCNv2.png')
 
     # create input data
     valid = tf.data.Dataset.load('data/tfdata/valid.data')
@@ -63,6 +64,7 @@ if __name__ == '__main__':
         val_data=valid.batch(256).take(100),  log_every_n_steps=5000,
         # distributions written every `log_every_n_steps` steps.
         histogram_freq=1, embedding_freq=1,
+        profile_batch='10,15',
         log_dir=logdir, update_freq=3000)
     DCN.compile_model(learning_rate=LR, clipnorm=1.0)
     DCN.model.summary()
@@ -71,7 +73,6 @@ if __name__ == '__main__':
         x=train.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE),
         epochs=10,
         callbacks=[tb_callback, checkpoint, csv_logger],
-        validation_data=valid.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE),
         validation_steps=100_000//BATCH_SIZE
     )
 

@@ -11,6 +11,9 @@ from tensorflow.keras.activations import relu, sigmoid
 INTS = tf.int32
 FLOATS = tf.float32
 
+# TODO add UnitNorm constraint to embedding,
+#  https://www.tensorflow.org/api_docs/python/tf/keras/constraints/UnitNorm
+
 
 class TensorboardOnNthBatch(tf.keras.callbacks.TensorBoard):
     """Same as Tensorboard callback, except logs validation and distribution
@@ -81,10 +84,10 @@ class CrossLayer(tf.keras.layers.Layer):
     def build(self, input_shape):
         self.w = self.add_weight(
             shape=(input_shape[0][-1],), initializer="random_normal",
-            trainable=True)
+            trainable=True, dtype=tf.float32)
         self.b = self.add_weight(
             shape=(input_shape[0][-1],), initializer="random_normal",
-            trainable=True)
+            trainable=True, dtype=tf.float32)
 
     def call(self, inputs):
         x_0 = inputs[0]
@@ -94,15 +97,39 @@ class CrossLayer(tf.keras.layers.Layer):
         return tf.transpose(cross_term, (0, 2, 1)) + self.b + x_0
 
 
+class CrossLayerV2(tf.keras.layers.Layer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.w = None
+        self.b = None
+
+    def build(self, input_shape):
+        self.w = self.add_weight(
+            shape=(input_shape[0][-1],input_shape[0][-1]),
+            initializer="random_normal", trainable=True, dtype=tf.float32)
+        self.b = self.add_weight(
+            shape=(input_shape[0][-1],), initializer="random_normal",
+            trainable=True, dtype=tf.float32)
+
+    def call(self, inputs):
+        x_0 = inputs[0]
+        x_l = inputs[1]
+        return layers.Multiply()([x_0, tf.matmul(x_l, self.w) + self.b]) + x_l
+
+
 class CrossLayerBlock(tf.keras.Model):
-    def __init__(self, n_layers: int = 6, *args, **kwargs):
+    def __init__(self, n_layers: int = 6, use_v2: bool = True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_layers = n_layers
         self.cross_layers = []
+        self.use_v2 = use_v2
 
     def build(self):
         for i in range(self.n_layers):
-            self.cross_layers.append(CrossLayer(name=f'cross{i}'))
+            if self.use_v2:
+                self.cross_layers.append(CrossLayerV2(name=f'cross_v2_{i}'))
+            else:
+                self.cross_layers.append(CrossLayer(name=f'cross{i}'))
 
     def call(self, inputs):
         x = inputs
@@ -159,7 +186,7 @@ class DeepCrossNetwork:
         self.save_path = save_path
         self.vocab_file = vocab_file
         if not os.path.exists(self.save_path):
-            os.mkdir(self.save_path)
+            os.makedirs(self.save_path)
         with open(vocab_file, 'rb') as fp:
             self.vocabs = pickle.load(fp)
 
@@ -245,7 +272,7 @@ class DeepCrossNetwork:
 
     def create_dcn_model(
             self, cross_layers: int = 6, dense_layers: int = 2,
-            units: int = 1024, dropout_rate: float = 0.5,
+            units: int = 1024, dropout_rate: float = 0.5, use_v2: bool = True,
             plot_file: str = None):
         """Cross network in parallel with MLP"""
         self.clear_model()
@@ -273,7 +300,8 @@ class DeepCrossNetwork:
 
         # cross network block
         self.submodels['cross_block'] = CrossLayerBlock(
-            n_layers=cross_layers, name=f'cross_layer_block_n_{cross_layers}')
+            n_layers=cross_layers, use_v2=use_v2,
+            name=f'cross_layer_block_n_{cross_layers}')
         cross_layer_output = self.submodels['cross_block'](feature_stack_layer)
         concat2 = layers.Concatenate(name='concat_layer2')(
             [cross_layer_output, mlp_layer_output])
@@ -290,6 +318,8 @@ class DeepCrossNetwork:
             inputs=self.input_layer, outputs=output_layer, name='DCN_model')
 
         if plot_file:
+            if not os.path.exists(os.path.dirname(plot_file)):
+                os.makedirs(os.path.dirname(plot_file))
             tf.keras.utils.plot_model(
                 self.model, to_file=plot_file, show_shapes=True,
                 expand_nested=True, show_layer_names=True)

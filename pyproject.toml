@@ -21,7 +21,9 @@ matplotlib = "*"
 ipython = "*"
 pandas = "*"
 numpy = "*"
-tensorboard_plugin_profile = "*"
+tensorboard = "*"
+# Profiler doesn't work with 2.19, or 2.17.
+tensorboard_plugin_profile = "=2.18"
 
 # If you want to use GPU. Slow to download. Runs much faster.
 [tool.poetry.group.nvidia.dependencies]
